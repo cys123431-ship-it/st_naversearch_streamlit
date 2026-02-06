@@ -4,8 +4,9 @@ import plotly.express as px
 import requests
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from dotenv import load_dotenv
+from wordcloud import WordCloud
 
 # 페이지 설정
 st.set_page_config(page_title="Naver Market Insights", layout="wide", page_icon="⚡")
@@ -205,6 +206,20 @@ def clean_html(text):
     return text.replace('<b>', '').replace('</b>', '').replace('&quot;', '"').replace('&lt;', '<').replace('&gt;', '>')
 
 @st.cache_data
+def generate_wordcloud(text):
+    """텍스트로 워드클라우드 생성 (한글 폰트 지원)"""
+    if not text: return None
+    
+    # Mac용 한글 폰트 경로
+    font_path = "/System/Library/Fonts/Supplemental/AppleGothic.ttf"
+    if not os.path.exists(font_path):
+        # 폰트가 없으면 기본값 시도 (한글 깨질 수 있음)
+        font_path = None 
+        
+    wc = WordCloud(font_path=font_path, width=800, height=400, background_color="white").generate(text)
+    return wc
+
+@st.cache_data
 def convert_df(df):
     """데이터프레임을 CSV로 변환 (한글 깨짐 방지 utf-8-sig)"""
     return df.to_csv(index=False).encode('utf-8-sig')
@@ -236,11 +251,11 @@ keywords = [k.strip() for k in target_kws.split(',') if k.strip()]
 st.sidebar.divider()
 st.sidebar.subheader("📅 분석 기간 설정")
 today = datetime.now()
-jan_1st = datetime(today.year, 1, 1)
+one_year_ago = today - timedelta(days=365)
 
 date_range = st.sidebar.date_input(
     "조회 기간 선택",
-    value=(jan_1st, today),
+    value=(one_year_ago, today),
     max_value=today,
     help="시작일과 종료일을 선택하세요."
 )
@@ -262,9 +277,9 @@ st.sidebar.info(f"선택된 키워드: {', '.join(keywords)}")
 
 st.sidebar.caption("💡 10분마다 데이터가 최신화됩니다.")
 
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
     "📈 트렌드 비교", "🛍️ 실시간 쇼핑", "📝 실시간 블로그", 
-    "☕ 실시간 카페", "📰 실시간 뉴스", "📊 쇼핑인사이트"
+    "☕ 실시간 카페", "📰 실시간 뉴스", "📊 쇼핑인사이트", "📑 종합 리포트"
 ])
 
 # Tab 1: 트렌드 비교
@@ -444,23 +459,38 @@ with tab2:
             
         st.divider()
         st.subheader("🛒 실시간 통합 인기 상품 리스트")
-        st.dataframe(
-            df_shop[['search_keyword', 'title', 'lprice', 'mallName', 'category1', 'link']].head(100), 
-            column_config={
-                "link": st.column_config.LinkColumn(
-                    "링크",
-                    help="클릭시 해당 상품 페이지로 이동합니다.",
-                    validate="^https://.*",
-                    display_text="바로가기"
-                ),
-                "lprice": st.column_config.NumberColumn(
-                    "최저가",
-                    format="%d원"
-                )
-            },
-            use_container_width=True,
-            hide_index=True
-        )
+        
+        # 상품 카드 레이아웃 구현 (이미지 + 상세정보)
+        for idx, row in df_shop.head(50).iterrows():
+            with st.container():
+                col_img, col_info = st.columns([1, 4])
+                
+                with col_img:
+                    # 상품 이미지 표시
+                    if row.get('image'):
+                        st.image(row['image'], use_container_width=True)
+                    else:
+                        st.info("이미지 없음")
+                
+                with col_info:
+                    # 상품명 (링크 연결)
+                    st.markdown(f"### [{row['title']}]({row['link']})")
+                    
+                    # 가격 및 카테고리
+                    p_col1, p_col2 = st.columns(2)
+                    with p_col1:
+                        st.write(f"**💰 최저가:** {int(row['lprice']):,}원")
+                    with p_col2:
+                        st.write(f"**📁 카테고리:** {row['category1']}")
+                    
+                    # 판매처 및 키워드
+                    st.write(f"**🏪 판매처:** {row['mallName']} | **🔑 키워드:** {row['search_keyword']}")
+                    
+                    # 바로가기 버튼
+                    st.link_button("상품 보러가기", row['link'], use_container_width=True)
+                
+                st.divider()
+
         st.download_button(
              label="📥 쇼핑 데이터 다운로드 (CSV)",
              data=convert_df(df_shop),
@@ -512,6 +542,12 @@ with tab3:
                                        color='빈도',
                                        color_continuous_scale=px.colors.sequential.PuRd)
                 st.plotly_chart(fig_blog_word, use_container_width=True)
+
+        # 워드클라우드 시각화
+        st.write("☁️ 블로그 이슈 워드클라우드")
+        wc_blog = generate_wordcloud(all_blog_titles)
+        if wc_blog:
+             st.image(wc_blog.to_array(), caption="Blog Title WordCloud")
         
         st.divider()
         st.subheader("📖 최근 블로그 콘텐츠 통합 리스트")
@@ -586,6 +622,12 @@ with tab4:
                               color_continuous_scale='Blues')
             st.plotly_chart(fig_word, use_container_width=True)
             st.caption("💡 제목에서 추출한 단어 빈도입니다. '추천', '비교', '후기' 등 사용자 의도를 파악해 보세요.")
+            
+        # 워드클라우드 시각화
+        st.write("☁️ 카페 이슈 워드클라우드")
+        wc_cafe = generate_wordcloud(all_titles)
+        if wc_cafe:
+             st.image(wc_cafe.to_array(), caption="Cafe Title WordCloud")
         
         st.divider()
         st.subheader("👥 최신 통합 카페 게시물")
@@ -642,6 +684,12 @@ with tab5:
                                    color='빈도', color_continuous_scale='Reds')
             st.plotly_chart(fig_news_word, use_container_width=True)
             st.caption("💡 뉴스의 핵심 단어를 통해 현재 시장의 주요 이슈를 파악해 보세요.")
+
+        # 워드클라우드 시각화 (신규)
+        st.write("☁️ 뉴스 이슈 워드클라우드")
+        wc_news = generate_wordcloud(all_news_titles)
+        if wc_news:
+             st.image(wc_news.to_array(), caption="News Title WordCloud")
 
         st.divider()
         st.subheader("🗞️ 최신 관련 뉴스 통합 리스트")
@@ -863,13 +911,124 @@ with tab6:
 
 
 
-    st.divider()
-    st.subheader("💡 쇼핑인사이트 활용법")
-    st.markdown("""
-    1. **cat_id 확인 방법**: [네이버 쇼핑](https://shopping.naver.com)에서 특정 카테고리를 선택한 후 주소창의 `cat_id=` 뒤에 오는 숫자를 복사하세요.
-    2. **트렌드 분석**: 클릭 지수가 급증하는 시기는 해당 상품의 제철이거나 특정 이벤트가 발생한 시점입니다.
-    3. **비즈니스 접목**: 클릭 지수 변화에 맞춰 소상공인의 재고 확보 및 이벤트 마케팅을 최적화할 수 있습니다.
-    """)
 
+# Tab 7: 종합 리포트 (신규)
+with tab7:
+    st.header("📑 마켓 인사이트 종합 리포트")
+    st.info("💡 각 탭의 데이터를 취합하여 핵심 인사이트를 요약합니다. (규칙 기반 자동 생성)")
+    st.warning("⚠️ **주의**: 본 리포트는 API에서 제공하는 **최대 100건의 상위 노출 데이터**만을 기반으로 분석되었습니다. 전체 시장 데이터를 대변하지 않을 수 있으며, 표본 편향이 있을 수 있으므로 참고용으로만 활용해 주세요.")
+
+    if not keywords:
+        st.warning("분석할 키워드를 사이드바에서 입력해주세요.")
+    else:
+        # 데이터 수집 (캐싱 활용)
+        # 1. 트렌드
+        final_trend_df = None
+        trend_raw, _ = fetch_realtime_trend(keywords, start_date, end_date) 
+        if trend_raw is not None and not trend_raw.empty:
+            trend_raw['period'] = pd.to_datetime(trend_raw['period'])
+            final_trend_df = trend_raw
+
+        # 2. 쇼핑
+        shop_raw, _ = fetch_realtime_shopping(keywords)
+        
+        # 3. 콘텐츠 (블로그/카페/뉴스)
+        blog_raw, _ = fetch_realtime_blog(keywords)
+        cafe_raw, _ = fetch_realtime_cafe(keywords)
+        news_raw, _ = fetch_realtime_news(keywords)
+
+        # --- 분석 로직 ---
+        
+        # 1. 트렌드 요약
+        trend_summary = "데이터 부족"
+        avg_ratio = 0
+        peak_date = "-"
+        if final_trend_df is not None:
+            avg_ratio = final_trend_df['ratio'].mean()
+            # sort_values로 안전하게 최대값 추출
+            max_row = final_trend_df.sort_values('ratio', ascending=False).iloc[0]
+            peak_date = max_row['period'].strftime('%Y-%m-%d')
+            peak_kw = max_row['keyword']
+            
+            # 상승/하락 추세
+            recent_avg = final_trend_df[final_trend_df['period'] >= final_trend_df['period'].max() - pd.Timedelta(days=3)]['ratio'].mean()
+            early_avg = final_trend_df[final_trend_df['period'] <= final_trend_df['period'].min() + pd.Timedelta(days=3)]['ratio'].mean()
+            
+            if recent_avg > early_avg * 1.1:
+                trend_status = "📈 상승세"
+            elif recent_avg < early_avg * 0.9:
+                trend_status = "📉 하락세"
+            else:
+                trend_status = "➡️ 보합세"
+                
+            trend_summary = f"{trend_status} (최고점: {peak_date}, {peak_kw})"
+
+        # 2. 시장 가격 요약
+        avg_price = 0
+        min_price = 0
+        mall_count = 0
+        if shop_raw is not None:
+             shop_raw['lprice'] = pd.to_numeric(shop_raw['lprice'], errors='coerce')
+             avg_price = shop_raw['lprice'].mean()
+             min_price = shop_raw['lprice'].min()
+             mall_count = shop_raw['mallName'].nunique()
+        
+        # 3. 콘텐츠 점유율
+        content_counts = {
+            "Blog": len(blog_raw) if blog_raw is not None else 0,
+            "Cafe": len(cafe_raw) if cafe_raw is not None else 0,
+            "News": len(news_raw) if news_raw is not None else 0
+        }
+        total_content = sum(content_counts.values())
+        top_channel = max(content_counts, key=content_counts.get) if total_content > 0 else "-"
+        
+        # --- 리포트 UI ---
+        
+        # Scorecards
+        r1, r2, r3, r4 = st.columns(4)
+        r1.metric("트렌드 상태", trend_summary.split('(')[0].strip())
+        r2.metric("평균 시장가", f"{int(avg_price):,}원" if not pd.isna(avg_price) else "-")
+        r3.metric("총 콘텐츠 반응", f"{total_content:,}건")
+        r4.metric("최다 활동 채널", top_channel)
+        
+        st.divider()
+        
+        c1, c2 = st.columns([1, 1])
+        
+        with c1:
+            st.subheader("📊 콘텐츠 채널별 점유율 (SOV)")
+            if total_content > 0:
+                df_sov = pd.DataFrame(list(content_counts.items()), columns=['채널', '건수'])
+                fig_sov = px.pie(df_sov, values='건수', names='채널', hole=0.5, 
+                                 color_discrete_sequence=px.colors.qualitative.Pastel)
+                st.plotly_chart(fig_sov, use_container_width=True)
+            else:
+                st.write("데이터가 없습니다.")
+
+        with c2:
+            st.subheader("📝 자동 생성 요약 리포트")
+            report_text = f"""
+            ### 1. 트렌드 분석
+            - 분석 기간 동안 검색 트렌드는 **{trend_summary}**를 보이고 있습니다.
+            - 검색량이 가장 높았던 시점은 **{peak_date}** 입니다.
+            
+            ### 2. 시장 가격 동향 (상위 100개 기준)
+            - 네이버 쇼핑 상위 노출 상품 기준, 평균 판매가는 **{int(avg_price):,}원** 입니다.
+            - 최저가는 **{int(min_price):,}원**으로 형성되어 있습니다.
+            - 수집된 데이터 내에서 **{mall_count}**개의 판매처가 확인됩니다.
+            
+            ### 3. 여론 및 콘텐츠 (최신 100건 기준)
+            - 수집된 **{total_content}**건의 문서는 주로 **{top_channel}** 영역에서 생성되었습니다.
+            - 상위 노출 콘텐츠 중 후기(블로그/카페)와 보도(뉴스)의 비중을 참고하여 마케팅 전략을 점검해 보세요.
+            
+            > **Note**: 위 분석은 제한된 표본(각 채널별 최대 100건)에 기반한 결과입니다.
+            """
+            st.markdown(report_text)
+            
+            # 텍스트 다운로드
+            st.download_button("📥 리포트 다운로드 (TXT)", report_text, file_name=f"report_{datetime.now().strftime('%Y%m%d')}.txt")
+
+    st.divider()
+    
 auth_status = "✅ 인증 완료" if (CLIENT_ID and CLIENT_SECRET) else "❌ 인증 미완료"
 st.sidebar.caption(f"상태: {auth_status} | 업데이트: {datetime.now().strftime('%H:%M:%S')}")

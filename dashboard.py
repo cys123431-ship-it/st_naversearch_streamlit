@@ -210,14 +210,33 @@ def generate_wordcloud(text):
     """텍스트로 워드클라우드 생성 (한글 폰트 지원)"""
     if not text: return None
     
-    # Mac용 한글 폰트 경로
-    font_path = "/System/Library/Fonts/Supplemental/AppleGothic.ttf"
-    if not os.path.exists(font_path):
-        # 폰트가 없으면 기본값 시도 (한글 깨질 수 있음)
-        font_path = None 
+    # 폰트 우선순위 설정 (프로젝트 폰트 -> 시스템 폰트)
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    project_font_path = os.path.join(current_dir, "fonts", "NanumGothic.ttf")
+    mac_font_path = "/System/Library/Fonts/Supplemental/AppleGothic.ttf"
+    linux_font_path = "/usr/share/fonts/truetype/nanum/NanumGothic.ttf" # 일반적인 리눅스 경로
+    
+    font_path = None
+    if os.path.exists(project_font_path):
+        font_path = project_font_path
+    elif os.path.exists(mac_font_path):
+        font_path = mac_font_path
+    elif os.path.exists(linux_font_path):
+        font_path = linux_font_path
         
-    wc = WordCloud(font_path=font_path, width=800, height=400, background_color="white").generate(text)
-    return wc
+    try:
+        wc = WordCloud(
+            font_path=font_path, 
+            width=800, 
+            height=400, 
+            background_color="white",
+            max_words=100
+        ).generate(text)
+        return wc
+    except Exception as e:
+        logger.error(f"워드클라우드 생성 중 오류 발생: {e}")
+        # 폰트 없이 재시도 (한글은 깨질 수 있음)
+        return WordCloud(width=800, height=400, background_color="white").generate(text)
 
 @st.cache_data
 def convert_df(df):

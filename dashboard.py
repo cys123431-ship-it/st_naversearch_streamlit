@@ -458,38 +458,60 @@ with tab2:
             st.plotly_chart(fig4, use_container_width=True)
             
         st.divider()
-        st.subheader("🛒 실시간 통합 인기 상품 리스트")
+        col_title, col_view = st.columns([3, 1])
+        with col_title:
+            st.subheader("🛒 실시간 통합 인기 상품 리스트")
+        with col_view:
+            view_mode = st.radio("보기 모드", ["목록보기", "섬네일 목록"], horizontal=True, label_visibility="collapsed")
         
-        # 상품 카드 레이아웃 구현 (이미지 + 상세정보)
-        for idx, row in df_shop.head(50).iterrows():
-            with st.container():
-                col_img, col_info = st.columns([1, 4])
-                
-                with col_img:
-                    # 상품 이미지 표시
-                    if row.get('image'):
-                        st.image(row['image'], use_container_width=True)
-                    else:
-                        st.info("이미지 없음")
-                
-                with col_info:
-                    # 상품명 (링크 연결)
-                    st.markdown(f"### [{row['title']}]({row['link']})")
+        if view_mode == "목록보기":
+            # 상품 카드 레이아웃 구현 (이미지 + 상세정보)
+            for idx, row in df_shop.head(50).iterrows():
+                with st.container():
+                    col_img, col_info = st.columns([1, 4])
                     
-                    # 가격 및 카테고리
-                    p_col1, p_col2 = st.columns(2)
-                    with p_col1:
-                        st.write(f"**💰 최저가:** {int(row['lprice']):,}원")
-                    with p_col2:
-                        st.write(f"**📁 카테고리:** {row['category1']}")
+                    with col_img:
+                        # 상품 이미지 표시
+                        if row.get('image'):
+                            st.image(row['image'], use_container_width=True)
+                        else:
+                            st.info("이미지 없음")
                     
-                    # 판매처 및 키워드
-                    st.write(f"**🏪 판매처:** {row['mallName']} | **🔑 키워드:** {row['search_keyword']}")
+                    with col_info:
+                        # 상품명 (링크 연결)
+                        st.markdown(f"### [{row['title']}]({row['link']})")
+                        
+                        # 가격 및 카테고리
+                        p_col1, p_col2 = st.columns(2)
+                        with p_col1:
+                            st.write(f"**💰 최저가:** {int(row['lprice']):,}원")
+                        with p_col2:
+                            st.write(f"**📁 카테고리:** {row['category1']}")
+                        
+                        # 판매처 및 키워드
+                        st.write(f"**🏪 판매처:** {row['mallName']} | **🔑 키워드:** {row['search_keyword']}")
+                        
+                        # 바로가기 버튼
+                        st.link_button("상품 보러가기", row['link'], use_container_width=True)
                     
-                    # 바로가기 버튼
-                    st.link_button("상품 보러가기", row['link'], use_container_width=True)
-                
-                st.divider()
+                    st.divider()
+        else:
+            # 섬네일 목록 (그리드 레이아웃)
+            rows_to_show = df_shop.head(60)
+            cols_per_row = 4
+            for i in range(0, len(rows_to_show), cols_per_row):
+                cols = st.columns(cols_per_row)
+                for j in range(cols_per_row):
+                    if i + j < len(rows_to_show):
+                        row = rows_to_show.iloc[i + j]
+                        with cols[j]:
+                            if row.get('image'):
+                                st.image(row['image'], use_container_width=True)
+                            st.markdown(f"**[{row['title']}]({row['link']})**")
+                            st.write(f"💰 {int(row['lprice']):,}원")
+                            st.caption(f"🏪 {row['mallName']}")
+                            st.link_button("보기", row['link'], use_container_width=True)
+                st.write("") # 간격 조정
 
         st.download_button(
              label="📥 쇼핑 데이터 다운로드 (CSV)",

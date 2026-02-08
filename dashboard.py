@@ -477,15 +477,29 @@ with tab2:
             st.plotly_chart(fig4, use_container_width=True)
             
         st.divider()
-        col_title, col_view = st.columns([3, 1])
+        col_title, col_kw_filter, col_view = st.columns([2, 1, 1])
         with col_title:
-            st.subheader("🛒 실시간 통합 인기 상품 리스트")
+            st.subheader("🛒 실시간 인기 상품 리스트")
+        with col_kw_filter:
+            # 키워드 필터 추가
+            filter_options = ["전체"] + keywords
+            selected_kw = st.selectbox("키워드 필터", filter_options, label_visibility="collapsed")
         with col_view:
             view_mode = st.radio("보기 모드", ["목록보기", "섬네일 목록"], horizontal=True, label_visibility="collapsed")
         
+        # 데이터 필터링
+        if selected_kw == "전체":
+            # 전체 보기 시 키워드별로 상품이 섞이도록 처리 (랜덤 선택 대신 키워드별 순차 노출 고려 가능)
+            display_df = df_shop.copy()
+            # 키워드별로 상위권을 우선 노출하기 위해 정렬 유지 또는 재정렬
+        else:
+            display_df = df_shop[df_shop['search_keyword'] == selected_kw]
+        
         if view_mode == "목록보기":
             # 상품 카드 레이아웃 구현 (이미지 + 상세정보)
-            for idx, row in df_shop.head(50).iterrows():
+            # 보여줄 상품 수 제한 (성능 고려)
+            rows_to_show = display_df.head(50)
+            for idx, row in rows_to_show.iterrows():
                 with st.container():
                     col_img, col_info = st.columns([1, 4])
                     
@@ -516,7 +530,7 @@ with tab2:
                     st.divider()
         else:
             # 섬네일 목록 (그리드 레이아웃)
-            rows_to_show = df_shop.head(60)
+            rows_to_show = display_df.head(60)
             cols_per_row = 4
             for i in range(0, len(rows_to_show), cols_per_row):
                 cols = st.columns(cols_per_row)
@@ -528,7 +542,7 @@ with tab2:
                                 st.image(row['image'], use_container_width=True)
                             st.markdown(f"**[{row['title']}]({row['link']})**")
                             st.write(f"💰 {int(row['lprice']):,}원")
-                            st.caption(f"🏪 {row['mallName']}")
+                            st.caption(f"🏪 {row['mallName']} | {row['search_keyword']}")
                             st.link_button("보기", row['link'], use_container_width=True)
                 st.write("") # 간격 조정
 

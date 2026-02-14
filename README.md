@@ -86,3 +86,128 @@ NAVER_CLIENT_SECRET=발급받은_SECRET
 * 일부 API는 호출 한도(QPS, 일일 제한)가 다릅니다.
 * 데이터랩 API는 검색 API보다 일일 호출 한도가 낮습니다.
 
+---
+
+# 🚀 대시보드 실행 가이드
+
+아래 두 가지 방법 중 원하는 방식을 선택하여 대시보드를 실행할 수 있습니다.
+
+---
+
+## 방법 1: 내 컴퓨터(로컬)에서 직접 실행하기
+
+> 💡 Python이 설치되어 있어야 합니다. (Python 3.9 이상 권장)
+
+### 1단계: 저장소 복제(Clone)
+
+터미널(또는 명령 프롬프트)을 열고, 원하는 작업 폴더로 이동한 뒤 아래 명령어를 입력합니다.
+
+```bash
+git clone https://github.com/corazzon/st_naversearch.git
+cd st_naversearch
+```
+
+* `git clone`은 GitHub에 있는 프로젝트 파일 전체를 내 컴퓨터로 복사하는 명령어입니다.
+* `cd st_naversearch`는 복사된 폴더 안으로 이동하는 명령어입니다.
+
+### 2단계: 가상환경 생성 및 의존성 설치
+
+프로젝트 전용 가상환경을 만들고, 필요한 라이브러리를 설치합니다.
+
+```bash
+# 가상환경 생성 (uv 사용 시)
+uv venv .venv
+
+# 가상환경 활성화 (Mac / Linux)
+source .venv/bin/activate
+
+# 가상환경 활성화 (Windows)
+.venv\Scripts\activate
+
+# 라이브러리 설치
+pip install -r requirements.txt
+```
+
+* 가상환경을 사용하면 다른 프로젝트와 라이브러리 버전이 충돌하는 것을 방지할 수 있습니다.
+* `requirements.txt`에는 `streamlit`, `pandas`, `plotly` 등 이 프로젝트에 필요한 모든 패키지가 명시되어 있습니다.
+
+### 3단계: 환경 변수(.env) 설정
+
+프로젝트 폴더 최상위에 `.env` 파일을 만들고, 위에서 발급받은 API 키를 입력합니다.
+
+```text
+NAVER_CLIENT_ID=내_클라이언트_ID
+NAVER_CLIENT_SECRET=내_클라이언트_시크릿
+```
+
+* ⚠️ **주의**: 등호(`=`) 앞뒤에 공백이 없어야 하며, 따옴표 없이 값만 입력합니다.
+
+### 4단계: 대시보드 실행
+
+```bash
+streamlit run dashboard.py
+```
+
+* 실행 후 터미널에 `http://localhost:8501` 주소가 표시됩니다.
+* 웹 브라우저가 자동으로 열리며, 대시보드를 확인할 수 있습니다.
+* 종료하려면 터미널에서 `Ctrl + C`를 누르면 됩니다.
+
+---
+
+## 방법 2: Streamlit Community Cloud에 무료 배포하기
+
+> 💡 GitHub 계정과 Streamlit Cloud 계정이 필요합니다. 별도의 서버 비용 없이 무료로 배포할 수 있습니다.
+
+### 1단계: GitHub에 저장소 준비
+
+* 이미 이 저장소를 Fork 했거나, 본인의 GitHub 계정에 프로젝트가 업로드되어 있어야 합니다.
+* 저장소에 아래 파일들이 반드시 포함되어 있는지 확인합니다.
+  * `dashboard.py` — 메인 대시보드 코드
+  * `requirements.txt` — 의존성 패키지 목록
+
+### 2단계: Streamlit Cloud 접속 및 로그인
+
+* [https://share.streamlit.io](https://share.streamlit.io) 에 접속합니다.
+* **Continue with GitHub** 버튼을 클릭하여 GitHub 계정으로 로그인합니다.
+
+### 3단계: 새 앱 배포
+
+1. 우측 상단의 **New app** 버튼을 클릭합니다.
+2. 아래 항목을 입력합니다.
+   * **Repository**: `corazzon/st_naversearch` (본인 저장소 경로)
+   * **Branch**: `main`
+   * **Main file path**: `dashboard.py`
+3. **Deploy!** 버튼을 클릭합니다.
+
+### 4단계: API 키를 Secrets에 등록
+
+배포 후 API 키가 없으면 데이터를 불러올 수 없습니다. Streamlit Cloud의 **Secrets** 기능을 사용하여 안전하게 키를 등록합니다.
+
+1. 배포된 앱 페이지에서 우측 하단 **⋮ (메뉴)** → **Settings** 클릭
+2. 왼쪽 메뉴에서 **Secrets** 선택
+3. 아래 내용을 입력하고 **Save** 클릭
+
+```toml
+NAVER_CLIENT_ID = "내_클라이언트_ID"
+NAVER_CLIENT_SECRET = "내_클라이언트_시크릿"
+```
+
+* ⚠️ Secrets에서는 **TOML 형식**을 사용하므로, 값을 **큰따옴표**로 감싸야 합니다.
+* 저장 후 앱이 자동으로 재시작되며, API 데이터가 정상적으로 표시됩니다.
+
+### 배포 완료! 🎉
+
+* 배포가 완료되면 `https://본인계정-st-naversearch.streamlit.app` 형태의 고유 URL이 생성됩니다.
+* 이 URL을 통해 누구나 웹 브라우저에서 대시보드에 접속할 수 있습니다.
+* GitHub에 코드를 Push하면 Streamlit Cloud가 자동으로 변경 사항을 감지하고 재배포합니다.
+
+---
+
+## ❓ 자주 묻는 질문 (FAQ)
+
+| 문제 | 해결 방법 |
+|------|-----------|
+| `ModuleNotFoundError` 발생 | `pip install -r requirements.txt`로 패키지를 재설치해 주세요. |
+| 포트 충돌 (`8501` 사용 중) | `streamlit run dashboard.py --server.port 8502`로 포트를 변경합니다. |
+| API 데이터가 표시되지 않음 | `.env` 파일(로컬) 또는 Secrets(Cloud)에 API 키가 올바르게 입력되었는지 확인합니다. |
+| 워드클라우드 한글이 깨짐 | `fonts/` 폴더에 `NanumGothic.ttf` 파일을 추가하거나, Cloud 환경에서는 자동 대체 폰트를 사용합니다. |

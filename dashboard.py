@@ -26,6 +26,22 @@ st.markdown("""
     }
     .stTabs [aria-selected="true"] { background-color: #ffffff; border-top: 4px solid #3f51b5; color: #3f51b5; }
     div[data-testid="stSidebar"] { background-color: #ffffff; border-right: 1px solid #dee2e6; }
+    .fixed-footer {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        z-index: 1000;
+        background-color: rgba(255, 255, 255, 0.8);
+        padding: 5px 10px;
+        border-radius: 20px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        font-size: 14px;
+        font-weight: 500;
+    }
+    .fixed-footer a {
+        color: #FF0000;
+        text-decoration: none;
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -243,6 +259,35 @@ def convert_df(df):
     """데이터프레임을 CSV로 변환 (한글 깨짐 방지 utf-8-sig)"""
     return df.to_csv(index=False).encode('utf-8-sig')
 
+def paginate(df, page_size, key_prefix):
+    """데이터프레임 페이징 및 내비게이션 UI"""
+    if df is None or df.empty:
+        return None
+    
+    total_pages = (len(df) - 1) // page_size + 1
+    
+    # 세션 상태 초기화
+    page_key = f"{key_prefix}_current_page"
+    if page_key not in st.session_state:
+        st.session_state[page_key] = 1
+        
+    # 페이지 선택 UI
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col1:
+        if st.button("이전", key=f"{key_prefix}_prev", disabled=st.session_state[page_key] <= 1):
+            st.session_state[page_key] -= 1
+            st.rerun()
+    with col2:
+        st.write(f"페이지 **{st.session_state[page_key]}** / {total_pages}")
+    with col3:
+        if st.button("다음", key=f"{key_prefix}_next", disabled=st.session_state[page_key] >= total_pages):
+            st.session_state[page_key] += 1
+            st.rerun()
+            
+    start_idx = (st.session_state[page_key] - 1) * page_size
+    end_idx = start_idx + page_size
+    return df.iloc[start_idx:end_idx]
+
 # --- 메인 UI ---
 st.title("⚡ 실시간 Naver Market Insights")
 st.caption("로컬 파일이 아닌, 네이버 API를 통해 실시간 데이터를 직접 분석합니다.")
@@ -415,14 +460,14 @@ with tab1:
             # 바차트 시각화
             if analysis_mode == "일반 트렌드":
                 fig2 = px.bar(avg_df, x='keyword', y='ratio', color='keyword', 
-                              title="평균 검색 활동 점유율", text_auto='.1f',
-                              color_discrete_sequence=px.colors.qualitative.Safe)
+                               title="평균 검색 활동 점유율", text_auto='.1f',
+                               color_discrete_sequence=px.colors.qualitative.Safe)
             else:
                 # 비교 모드에서는 Facet 활용
                 facet_c = 'gender' if analysis_mode == "성별 비교" else None
                 fig2 = px.bar(avg_df, x='keyword', y='ratio', color='gender', barmode='group',
-                              title="성별/키워드별 평균 검색 강도", text_auto='.1f',
-                              color_discrete_sequence=px.colors.qualitative.Safe)
+                               title="성별/키워드별 평균 검색 강도", text_auto='.1f',
+                               color_discrete_sequence=px.colors.qualitative.Safe)
 
             st.plotly_chart(fig2, use_container_width=True)
             
@@ -460,7 +505,7 @@ with tab2:
         m2.metric("전체 평균가", f"{int(df_shop['lprice'].mean()):,}원")
         m3.metric("활성 판매처", f"{df_shop['mallName'].nunique()}개")
         
-        col3, col4 = st.columns([2, 1])
+        col3, col4 = st.columns([1, 1])
         with col3:
             # 그래프 3: 키워드별 가격 분포 박스 플롯
             fig3 = px.box(df_shop, x='search_keyword', y='lprice', color='search_keyword',
@@ -469,12 +514,39 @@ with tab2:
                           template="simple_white")
             st.plotly_chart(fig3, use_container_width=True)
         with col4:
-            # 그래프 4: 키워드별 상품 비중
-            kw_counts = df_shop['search_keyword'].value_counts()
-            fig4 = px.pie(values=kw_counts.values, names=kw_counts.index, 
-                          title="키워드별 데이터 비중", hole=0.4,
+            # 그래프 4: 키워드별 상품 비중 (도넛 -> 막대 변경)
+            kw_counts = df_shop['search_keyword'].value_counts().reset_index()
+            kw_counts.columns = ['키워드', '상품 수']
+            fig4 = px.bar(kw_counts, x='키워드', y='상품 수', color='키워드',
+                          title="키워드별 수집 상품 비중",
+                          text_auto=True,
                           color_discrete_sequence=px.colors.qualitative.Pastel)
             st.plotly_chart(fig4, use_container_width=True)
+            
+        st.divider()
+        
+        # 추가 통계 섹션
+        st.subheader("📊 쇼핑 마켓 심층 분석")
+        s_col1, s_col2 = st.columns([1, 1])
+        
+        with s_col1:
+            # 제품별 가격 기술 통계
+            st.markdown("#### 💰 가격 기술 통계")
+            price_stats = df_shop.groupby('search_keyword')['lprice'].describe().reset_index()
+            price_stats.columns = ['키워드', '개수', '평균가', '표준편차', '최솟값', '25%', '50%', '75%', '최댓값']
+            # 보기 좋게 포맷팅
+            price_stats[['평균가', '최솟값', '50%', '최댓값']] = price_stats[['평균가', '최솟값', '50%', '최댓값']].applymap(lambda x: f"{int(x):,}원" if not pd.isna(x) else "-")
+            st.dataframe(price_stats[['키워드', '평균가', '최솟값', '50%', '최댓값']], use_container_width=True, hide_index=True)
+            
+        with s_col2:
+            # 판매처별 빈도수 막대그래프
+            st.markdown("#### 🏪 상위 판매처 분포")
+            mall_counts = df_shop['mallName'].value_counts().head(10).reset_index()
+            mall_counts.columns = ['판매처', '상품 수']
+            fig_mall = px.bar(mall_counts, x='상품 수', y='판매처', orientation='h',
+                              title="채널별 상품 노출 빈도 (TOP 10)",
+                              color='상품 수', color_continuous_scale='GnBu')
+            st.plotly_chart(fig_mall, use_container_width=True)
             
         st.divider()
         col_title, col_kw_filter, col_view = st.columns([2, 1, 1])
@@ -497,54 +569,57 @@ with tab2:
         
         if view_mode == "목록보기":
             # 상품 카드 레이아웃 구현 (이미지 + 상세정보)
-            # 보여줄 상품 수 제한 (성능 고려)
-            rows_to_show = display_df.head(50)
-            for idx, row in rows_to_show.iterrows():
-                with st.container():
-                    col_img, col_info = st.columns([1, 4])
-                    
-                    with col_img:
-                        # 상품 이미지 표시
-                        if row.get('image'):
-                            st.image(row['image'], use_container_width=True)
-                        else:
-                            st.info("이미지 없음")
-                    
-                    with col_info:
-                        # 상품명 (링크 연결)
-                        st.markdown(f"### [{row['title']}]({row['link']})")
+            # 페이징 적용
+            paged_df = paginate(display_df, 20, "shop_list")
+            if paged_df is not None:
+                for idx, row in paged_df.iterrows():
+                    with st.container():
+                        col_img, col_info = st.columns([1, 4])
                         
-                        # 가격 및 카테고리
-                        p_col1, p_col2 = st.columns(2)
-                        with p_col1:
-                            st.write(f"**💰 최저가:** {int(row['lprice']):,}원")
-                        with p_col2:
-                            st.write(f"**📁 카테고리:** {row['category1']}")
-                        
-                        # 판매처 및 키워드
-                        st.write(f"**🏪 판매처:** {row['mallName']} | **🔑 키워드:** {row['search_keyword']}")
-                        
-                        # 바로가기 버튼
-                        st.link_button("상품 보러가기", row['link'], use_container_width=True)
-                    
-                    st.divider()
-        else:
-            # 섬네일 목록 (그리드 레이아웃)
-            rows_to_show = display_df.head(60)
-            cols_per_row = 4
-            for i in range(0, len(rows_to_show), cols_per_row):
-                cols = st.columns(cols_per_row)
-                for j in range(cols_per_row):
-                    if i + j < len(rows_to_show):
-                        row = rows_to_show.iloc[i + j]
-                        with cols[j]:
+                        with col_img:
+                            # 상품 이미지 표시
                             if row.get('image'):
                                 st.image(row['image'], use_container_width=True)
-                            st.markdown(f"**[{row['title']}]({row['link']})**")
-                            st.write(f"💰 {int(row['lprice']):,}원")
-                            st.caption(f"🏪 {row['mallName']} | {row['search_keyword']}")
-                            st.link_button("보기", row['link'], use_container_width=True)
-                st.write("") # 간격 조정
+                            else:
+                                st.info("이미지 없음")
+                        
+                        with col_info:
+                            # 상품명 (링크 연결)
+                            st.markdown(f"### [{row['title']}]({row['link']})")
+                            
+                            # 가격 및 카테고리
+                            p_col1, p_col2 = st.columns(2)
+                            with p_col1:
+                                st.write(f"**💰 최저가:** {int(row['lprice']):,}원")
+                            with p_col2:
+                                st.write(f"**📁 카테고리:** {row['category1']}")
+                            
+                            # 판매처 및 키워드
+                            st.write(f"**🏪 판매처:** {row['mallName']} | **🔑 키워드:** {row['search_keyword']}")
+                            
+                            # 바로가기 버튼
+                            st.link_button("상품 보러가기", row['link'], use_container_width=True)
+                        
+                        st.divider()
+        else:
+            # 섬네일 목록 (그리드 레이아웃)
+            # 페이징 적용
+            paged_df = paginate(display_df, 12, "shop_thumb")
+            if paged_df is not None:
+                cols_per_row = 4
+                for i in range(0, len(paged_df), cols_per_row):
+                    cols = st.columns(cols_per_row)
+                    for j in range(cols_per_row):
+                        if i + j < len(paged_df):
+                            row = paged_df.iloc[i + j]
+                            with cols[j]:
+                                if row.get('image'):
+                                    st.image(row['image'], use_container_width=True)
+                                st.markdown(f"**[{row['title']}]({row['link']})**")
+                                st.write(f"💰 {int(row['lprice']):,}원")
+                                st.caption(f"🏪 {row['mallName']} | {row['search_keyword']}")
+                                st.link_button("보기", row['link'], use_container_width=True)
+                    st.write("") # 간격 조정
 
         st.download_button(
              label="📥 쇼핑 데이터 다운로드 (CSV)",
@@ -606,23 +681,26 @@ with tab3:
         
         st.divider()
         st.subheader("📖 최근 블로그 콘텐츠 통합 리스트")
-        st.dataframe(
-            df_blog[['search_keyword', 'title', 'bloggername', 'postdate', 'link']].sort_values('postdate', ascending=False).head(100), 
-            column_config={
-                "link": st.column_config.LinkColumn(
-                    "링크",
-                    help="클릭시 해당 블로그로 이동합니다.",
-                    validate="^https://.*",
-                    display_text="바로가기"
-                ),
-                "postdate": st.column_config.DateColumn(
-                    "작성일",
-                    format="YYYY-MM-DD"
-                )
-            },
-            use_container_width=True,
-            hide_index=True
-        )
+        # 페이징 적용
+        paged_blog = paginate(df_blog.sort_values('postdate', ascending=False), 20, "blog_list")
+        if paged_blog is not None:
+            st.dataframe(
+                paged_blog[['search_keyword', 'title', 'bloggername', 'postdate', 'link']], 
+                column_config={
+                    "link": st.column_config.LinkColumn(
+                        "링크",
+                        help="클릭시 해당 블로그로 이동합니다.",
+                        validate="^https://.*",
+                        display_text="바로가기"
+                    ),
+                    "postdate": st.column_config.DateColumn(
+                        "작성일",
+                        format="YYYY-MM-DD"
+                    )
+                },
+                use_container_width=True,
+                hide_index=True
+            )
         st.download_button(
              label="📥 블로그 데이터 다운로드 (CSV)",
              data=convert_df(df_blog),
@@ -648,8 +726,8 @@ with tab4:
         col_cafe1, col_cafe2 = st.columns(2)
         with col_cafe1:
             fig_cafe = px.bar(cafe_kw_counts, x='게시물 수', y='키워드', orientation='h',
-                              title="키워드별 카페 활동량 비교", color='키워드',
-                              color_discrete_sequence=px.colors.qualitative.Pastel)
+                               title="키워드별 카페 활동량 비교", color='키워드',
+                               color_discrete_sequence=px.colors.qualitative.Pastel)
             st.plotly_chart(fig_cafe, use_container_width=True)
             
         with col_cafe2:
@@ -673,8 +751,8 @@ with tab4:
         if word_counts:
             df_word = pd.DataFrame(word_counts, columns=['단어', '빈도'])
             fig_word = px.bar(df_word, x='단어', y='빈도', color='빈도',
-                              title="제목 내 빈출 단어", text_auto=True,
-                              color_continuous_scale='Blues')
+                               title="제목 내 빈출 단어", text_auto=True,
+                               color_continuous_scale='Blues')
             st.plotly_chart(fig_word, use_container_width=True)
             st.caption("💡 제목에서 추출한 단어 빈도입니다. '추천', '비교', '후기' 등 사용자 의도를 파악해 보세요.")
             
@@ -686,19 +764,22 @@ with tab4:
         
         st.divider()
         st.subheader("👥 최신 통합 카페 게시물")
-        st.dataframe(
-            df_cafe[['search_keyword', 'title', 'cafename', 'cafeurl']].head(100),
-            column_config={
-                "cafeurl": st.column_config.LinkColumn(
-                    "링크",
-                    help="클릭시 해당 카페 게시글로 이동합니다.",
-                    validate="^https://.*",
-                    display_text="바로가기"
-                )
-            },
-            use_container_width=True,
-            hide_index=True
-        )
+        # 페이징 적용
+        paged_cafe = paginate(df_cafe, 20, "cafe_list")
+        if paged_cafe is not None:
+            st.dataframe(
+                paged_cafe[['search_keyword', 'title', 'cafename', 'cafeurl']],
+                column_config={
+                    "cafeurl": st.column_config.LinkColumn(
+                        "링크",
+                        help="클릭시 해당 카페 게시글로 이동합니다.",
+                        validate="^https://.*",
+                        display_text="바로가기"
+                    )
+                },
+                use_container_width=True,
+                hide_index=True
+            )
         st.download_button(
              label="📥 카페 데이터 다운로드 (CSV)",
              data=convert_df(df_cafe),
@@ -722,8 +803,8 @@ with tab5:
         news_daily = df_news.groupby([df_news['pubDate'].dt.date, 'search_keyword']).size().reset_index(name='news_count')
         news_daily.columns = ['발행일', '키워드', '뉴스 수']
         fig_news = px.bar(news_daily, x='발행일', y='뉴스 수', color='키워드', barmode='group',
-                          title="날짜별 뉴스 발행 현황",
-                          template="simple_white")
+                           title="날짜별 뉴스 발행 현황",
+                           template="simple_white")
         st.plotly_chart(fig_news, use_container_width=True)
         
         # 뉴스 제목 키워드 분석
@@ -1064,7 +1145,7 @@ with tab7:
             st.subheader("📝 자동 생성 요약 리포트")
             report_text = f"""
             ### 1. 트렌드 분석
-            - 분석 기간 동안 검색 트렌드는 **{trend_summary}**를 보이고 있습니다.
+            - 분석 기간 동안 검색 트렌드는 **{trend_status}**를 보이고 있습니다.
             - 검색량이 가장 높았던 시점은 **{peak_date}** 입니다.
             
             ### 2. 시장 가격 동향 (상위 100개 기준)
@@ -1087,3 +1168,10 @@ with tab7:
     
 auth_status = "✅ 인증 완료" if (CLIENT_ID and CLIENT_SECRET) else "❌ 인증 미완료"
 st.sidebar.caption(f"상태: {auth_status} | 업데이트: {datetime.now().strftime('%H:%M:%S')}")
+st.sidebar.caption("[© 오늘코드](https://www.youtube.com/todaycode)")
+
+# 우측 하단 고정 링크
+st.markdown(
+    '<div class="fixed-footer"><a href="https://www.youtube.com/todaycode" target="_blank">📺 유튜브 오늘코드</a></div>',
+    unsafe_allow_html=True
+)

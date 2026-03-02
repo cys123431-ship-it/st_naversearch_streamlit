@@ -749,19 +749,42 @@ with tab2:
         with col3:
             # 그래프 3: 키워드별 가격 분포 박스 플롯
             fig3 = px.box(df_shop, x='search_keyword', y='lprice', color='search_keyword',
-                          title="키워드별 최저가 분포 비교",
+                          title="키워드별 최저가 분포 (Box Plot)",
                           labels={'lprice': '최저가(원)', 'search_keyword': '검색어'},
-                          template="plotly_dark" if is_dark else "simple_white")
+                          template=plotly_template)
             st.plotly_chart(update_chart_style(fig3), use_container_width=True)
+            
         with col4:
-            # 그래프 4: 키워드별 상품 비중 (도넛 -> 막대 변경)
-            kw_counts = df_shop['search_keyword'].value_counts().reset_index()
-            kw_counts.columns = ['키워드', '상품 수']
-            fig4 = px.bar(kw_counts, x='키워드', y='상품 수', color='키워드',
-                          title="키워드별 수집 상품 비중",
-                          text_auto=True,
-                          color_discrete_sequence=px.colors.qualitative.Pastel)
-            st.plotly_chart(update_chart_style(fig4), use_container_width=True)
+            # 그래프 4: 가격 분포 히스토그램 (신규 추가)
+            fig_hist = px.histogram(df_shop, x='lprice', color='search_keyword',
+                                   title="키워드별 가격 분포 (Histogram)",
+                                   labels={'lprice': '최저가(원)', 'search_keyword': '검색어', 'count': '빈도'},
+                                   barmode='overlay', # 여러 키워드가 겹쳐 보일 수 있도록 설정
+                                   marginal='rug',   # 하단에 러그 플롯 추가 (밀도 확인용)
+                                   template=plotly_template)
+            st.plotly_chart(update_chart_style(fig_hist), use_container_width=True)
+            
+        st.divider()
+
+        # 기존 상품 비중 차트는 하단에 배치하거나 레이아웃을 조정
+        col5, col6 = st.columns([1, 1])
+        with col5:
+             kw_counts = df_shop['search_keyword'].value_counts().reset_index()
+             kw_counts.columns = ['키워드', '상품 수']
+             fig4 = px.bar(kw_counts, x='키워드', y='상품 수', color='키워드',
+                           title="키워드별 수집 상품 비중",
+                           text_auto=True,
+                           color_discrete_sequence=px.colors.qualitative.Pastel)
+             st.plotly_chart(update_chart_style(fig4), use_container_width=True)
+        
+        with col6:
+            # 판매처별 빈도수 막대그래프 (하단 섹션에서 위로 이동 또는 중복 조정)
+            mall_counts = df_shop['mallName'].value_counts().head(10).reset_index()
+            mall_counts.columns = ['판매처', '상품 수']
+            fig_mall = px.bar(mall_counts, x='상품 수', y='판매처', orientation='h',
+                              title="채널별 상품 노출 빈도 (TOP 10)",
+                              color='상품 수', color_continuous_scale='GnBu')
+            st.plotly_chart(update_chart_style(fig_mall), use_container_width=True)
             
         st.divider()
         
@@ -1075,23 +1098,26 @@ with tab5:
 
         st.divider()
         st.subheader("🗞️ 최신 관련 뉴스 통합 리스트")
-        st.dataframe(
-            df_news[['search_keyword', 'title', 'pubDate', 'link']].sort_values('pubDate', ascending=False).head(100), 
-            column_config={
-                "link": st.column_config.LinkColumn(
-                    "링크",
-                    help="클릭시 해당 뉴스 기사로 이동합니다.",
-                    validate="^https://.*",
-                    display_text="바로가기"
-                ),
-                "pubDate": st.column_config.DatetimeColumn(
-                    "발행일시",
-                    format="YYYY-MM-DD HH:mm"
-                )
-            },
-            use_container_width=True,
-            hide_index=True
-        )
+        # 페이징 적용
+        paged_news = paginate(df_news.sort_values('pubDate', ascending=False), 20, "news_list")
+        if paged_news is not None:
+            st.dataframe(
+                paged_news[['search_keyword', 'title', 'pubDate', 'link']], 
+                column_config={
+                    "link": st.column_config.LinkColumn(
+                        "링크",
+                        help="클릭시 해당 뉴스 기사로 이동합니다.",
+                        validate="^https://.*",
+                        display_text="바로가기"
+                    ),
+                    "pubDate": st.column_config.DatetimeColumn(
+                        "발행일시",
+                        format="YYYY-MM-DD HH:mm"
+                    )
+                },
+                use_container_width=True,
+                hide_index=True
+            )
         st.download_button(
              label="📥 뉴스 데이터 다운로드 (CSV)",
              data=convert_df(df_news),

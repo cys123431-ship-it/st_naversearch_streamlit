@@ -99,7 +99,7 @@ NAVER_CLIENT_SECRET=발급받은_SECRET
 
 ## 방법 1: 내 컴퓨터(로컬)에서 직접 실행하기
 
-> 💡 Python이 설치되어 있어야 합니다. (Python 3.9 이상 권장)
+> 💡 Python이 설치되어 있어야 합니다. (Python 3.13 이상 권장)
 
 ### 1단계: 저장소 복제(Clone)
 

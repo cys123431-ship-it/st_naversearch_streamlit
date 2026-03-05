@@ -126,21 +126,6 @@ st.markdown(f"""
         font-size: 1.1rem !important; 
     }}
     
-    /* 하단 푸터 */
-    .fixed-footer {{
-        position: fixed;
-        bottom: 20px;
-        right: 20px;
-        z-index: 1000;
-        background-color: {card_bg}f2;
-        padding: 10px 20px;
-        border-radius: 20px;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.4);
-        font-size: 14px;
-        font-weight: 700;
-        border: 2px solid {accent_color};
-    }}
-    
     /* 입력창 및 선택창 스타일 보정 (BaseWeb 기반) */
     div[data-baseweb="select"] {{
         background-color: {tab_bg} !important;
@@ -1469,9 +1454,3 @@ with tab7:
 auth_status = "✅ 인증 완료" if (CLIENT_ID and CLIENT_SECRET) else "❌ 인증 미완료"
 st.sidebar.caption(f"상태: {auth_status} | 소스: {API_KEY_SOURCE} | 업데이트: {datetime.now().strftime('%H:%M:%S')}")
 st.sidebar.caption("[© 오늘코드](https://www.youtube.com/todaycode)")
-
-# 우측 하단 고정 링크
-st.markdown(
-    '<div class="fixed-footer"><a href="https://www.youtube.com/todaycode" target="_blank">📺 유튜브 오늘코드</a></div>',
-    unsafe_allow_html=True
-)

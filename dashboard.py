@@ -7,6 +7,8 @@ import os
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from wordcloud import WordCloud
+from urllib.parse import quote
+import streamlit.components.v1 as components
 
 # 페이지 설정
 st.set_page_config(page_title="Naver Market Insights", layout="wide", page_icon="⚡")
@@ -222,6 +224,19 @@ def get_api_keys():
 
 CLIENT_ID, CLIENT_SECRET, API_KEY_SOURCE = get_api_keys()
 HEADERS = {"X-Naver-Client-Id": CLIENT_ID, "X-Naver-Client-Secret": CLIENT_SECRET, "Content-Type": "application/json"}
+
+
+def build_google_trends_url(keyword_text, geo, timeframe):
+    """키워드/지역/기간 기반 구글 트렌드 Explore URL 생성"""
+    cleaned_keywords = [k.strip() for k in keyword_text.split(",") if k.strip()]
+    if not cleaned_keywords:
+        return "https://trends.google.com/trends/explore"
+
+    q_param = ",".join(cleaned_keywords)
+    return (
+        "https://trends.google.com/trends/explore"
+        f"?date={quote(timeframe)}&geo={quote(geo)}&q={quote(q_param)}"
+    )
 
 # --- 실시간 API 호출 함수 ---
 @st.cache_data(ttl=600)
@@ -493,9 +508,9 @@ st.sidebar.info(f"선택된 키워드: {', '.join(keywords)}")
 
 st.sidebar.caption("💡 10분마다 데이터가 최신화됩니다.")
 
-tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
     "📈 트렌드 비교", "🛍️ 실시간 쇼핑", "📝 실시간 블로그", 
-    "☕ 실시간 카페", "📰 실시간 뉴스", "📊 쇼핑인사이트", "📑 종합 리포트"
+    "☕ 실시간 카페", "📰 실시간 뉴스", "📊 쇼핑인사이트", "📑 종합 리포트", "🌐 구글 트렌드"
 ])
 
 # Tab 1: 트렌드 비교
@@ -1469,6 +1484,46 @@ with tab7:
             st.download_button("📥 리포트 다운로드 (TXT)", report_text, file_name=f"report_{datetime.now().strftime('%Y%m%d')}.txt")
 
     st.divider()
+
+# Tab 8: 구글 트렌드 바로가기
+with tab8:
+    st.header("🌐 구글 트렌드")
+    st.info("Google Trends 페이지를 탭 안에서 바로 열 수 있습니다.")
+
+    col_g1, col_g2, col_g3 = st.columns([2.5, 1, 1.2])
+    with col_g1:
+        gt_keywords = st.text_input(
+            "구글 트렌드 키워드 (쉼표 구분)",
+            value=target_kws,
+            key="google_trends_keywords",
+        )
+    with col_g2:
+        gt_geo = st.selectbox(
+            "지역",
+            options=["KR", "US", "JP", ""],
+            format_func=lambda x: "전세계" if x == "" else x,
+            index=0,
+            key="google_trends_geo",
+        )
+    with col_g3:
+        time_options = {
+            "지난 7일": "now 7-d",
+            "지난 30일": "today 1-m",
+            "지난 12개월": "today 12-m",
+            "2004~현재": "all",
+        }
+        selected_time_label = st.selectbox(
+            "기간",
+            options=list(time_options.keys()),
+            index=2,
+            key="google_trends_time",
+        )
+        gt_timeframe = time_options[selected_time_label]
+
+    google_trends_url = build_google_trends_url(gt_keywords, gt_geo, gt_timeframe)
+    st.link_button("🔗 구글 트렌드 새 탭으로 열기", google_trends_url)
+    st.caption("앱 내 임베드가 보안정책으로 차단되면 위 버튼으로 열어주세요.")
+    components.iframe(google_trends_url, height=900, scrolling=True)
     
 auth_status = "✅ 인증 완료" if (CLIENT_ID and CLIENT_SECRET) else "❌ 인증 미완료"
 st.sidebar.caption(f"상태: {auth_status} | 소스: {API_KEY_SOURCE} | 업데이트: {datetime.now().strftime('%H:%M:%S')}")

@@ -87,13 +87,25 @@ st.markdown(f"""
     /* 제목 스타일 */
     h1, h2, h3 {{ color: {header_color} !important; font-family: 'Outfit', sans-serif; }}
     
-    /* 탭 스타일 */
-    .stTabs [data-baseweb="tab-list"] {{ gap: 10px; background-color: transparent; }}
+    /* 탭 스타일 (폭이 좁아도 마지막 탭 접근 가능하도록 반응형 처리) */
+    .stTabs [data-baseweb="tab-list"] {{
+        gap: 6px;
+        background-color: transparent;
+        overflow-x: auto;
+        overflow-y: hidden;
+        flex-wrap: nowrap;
+        scrollbar-width: thin;
+        padding-bottom: 2px;
+    }}
     .stTabs [data-baseweb="tab"] {{
-        padding: 10px 20px;
+        flex: 0 0 auto;
+        min-width: max-content;
+        white-space: nowrap;
+        padding: 8px 12px;
         background-color: {tab_bg};
         border-radius: 5px 5px 0 0;
         font-weight: 600;
+        font-size: 0.9rem;
         color: {text_color};
         border: none;
     }}
@@ -101,6 +113,13 @@ st.markdown(f"""
         background-color: {tab_active_bg} !important; 
         border-top: 4px solid {accent_color} !important; 
         color: {accent_color} !important; 
+    }}
+    @media (max-width: 1200px) {{
+        .stTabs [data-baseweb="tab-list"] {{ gap: 4px; }}
+        .stTabs [data-baseweb="tab"] {{
+            padding: 6px 10px;
+            font-size: 0.82rem;
+        }}
     }}
     
     /* 위젯 라벨 및 마크다운 */

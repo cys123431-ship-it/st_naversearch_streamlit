@@ -43,6 +43,22 @@ type SearchItem = {
   cafename?: string;
 };
 
+type TrendsEmbedApi = {
+  renderExploreWidgetTo?: (
+    container: Element,
+    widgetType: string,
+    request: {
+      comparisonItem: Array<{ keyword: string; geo: string; time: string }>;
+      category: number;
+      property: string;
+    },
+    options: {
+      exploreQuery: string;
+      guestPath: string;
+    },
+  ) => void;
+};
+
 const TABS: { id: TabId; label: string }[] = [
   { id: "trend", label: "트렌드 비교" },
   { id: "shop", label: "실시간 쇼핑" },
@@ -105,6 +121,35 @@ function toShortDate(value: string) {
   const date = new Date(normalized);
   if (Number.isNaN(date.getTime())) return value;
   return date.toISOString().slice(0, 10);
+}
+
+function escapeCsvCell(value: unknown) {
+  const stringified = String(value ?? "");
+  const escaped = stringified.replace(/"/g, '""');
+  return /[",\n]/.test(escaped) ? `"${escaped}"` : escaped;
+}
+
+function toCsv(rows: Record<string, unknown>[]) {
+  if (!rows.length) return "";
+  const headers = Object.keys(rows[0]);
+  const lines = [
+    headers.join(","),
+    ...rows.map((row) => headers.map((header) => escapeCsvCell(row[header])).join(",")),
+  ];
+  return `\uFEFF${lines.join("\n")}`;
+}
+
+function downloadFile(fileName: string, content: string, mimeType: string) {
+  if (!content) return;
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
 }
 
 async function postJson<T>(url: string, body: unknown) {
@@ -224,6 +269,14 @@ export default function Home() {
     return `https://trends.google.com/trends/explore?${params.toString()}`;
   }, [keywords, googleGeo, googleTimeframe]);
 
+  const reportText = useMemo(
+    () => `1. 트렌드 최고점: ${trendPeak.keyword} / ${trendPeak.period} / ${trendPeak.ratio.toFixed(2)}
+2. 시장 가격대: 평균 ${toCurrency(priceStats.avg)} · 최저 ${toCurrency(priceStats.min)} · 최고 ${toCurrency(priceStats.max)}
+3. 콘텐츠 반응량: 블로그 ${blogItems.length.toLocaleString("ko-KR")}건, 카페 ${cafeItems.length.toLocaleString("ko-KR")}건, 뉴스 ${newsItems.length.toLocaleString("ko-KR")}건
+4. 활용 제안: 키워드별 상승 시점, 가격 분포, 채널 반응을 함께 보고 집행 순서를 결정하세요.`,
+    [blogItems.length, cafeItems.length, newsItems.length, priceStats.avg, priceStats.max, priceStats.min, trendPeak.keyword, trendPeak.period, trendPeak.ratio],
+  );
+
   useEffect(() => {
     let mounted = true;
 
@@ -246,6 +299,84 @@ export default function Home() {
       mounted = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (activeTab !== "google") return;
+
+    const container = document.getElementById("google-trends-widget");
+    if (!container) return;
+
+    if (!keywords.length) {
+      container.innerHTML = "<p>키워드를 1개 이상 입력하면 구글 트렌드 위젯이 표시됩니다.</p>";
+      return;
+    }
+
+    const renderWidget = () => {
+      const trendsEmbed = (window as { trends?: { embed?: TrendsEmbedApi } }).trends?.embed;
+      if (!trendsEmbed?.renderExploreWidgetTo) return;
+
+      container.innerHTML = "";
+      const comparisonItem = keywords.map((keyword) => ({
+        keyword,
+        geo: googleGeo,
+        time: googleTimeframe,
+      }));
+      const exploreQuery = new URLSearchParams({
+        q: keywords.join(","),
+        date: googleTimeframe,
+      });
+      if (googleGeo) exploreQuery.set("geo", googleGeo);
+
+      trendsEmbed.renderExploreWidgetTo(
+        container,
+        "TIMESERIES",
+        {
+          comparisonItem,
+          category: 0,
+          property: "",
+        },
+        {
+          exploreQuery: exploreQuery.toString(),
+          guestPath: "https://trends.google.com/trends/embed/",
+        },
+      );
+    };
+
+    const existingScript = document.getElementById("google-trends-script") as HTMLScriptElement | null;
+    const hasEmbedApi = Boolean(
+      (window as { trends?: { embed?: TrendsEmbedApi } }).trends?.embed?.renderExploreWidgetTo,
+    );
+    if (hasEmbedApi) {
+      renderWidget();
+      return;
+    }
+
+    if (existingScript) {
+      existingScript.addEventListener("load", renderWidget);
+      return () => existingScript.removeEventListener("load", renderWidget);
+    }
+
+    const script = document.createElement("script");
+    script.id = "google-trends-script";
+    script.src = "https://ssl.gstatic.com/trends_nrtr/4012_RC01/embed_loader.js";
+    script.async = true;
+    script.onload = renderWidget;
+    document.body.appendChild(script);
+
+    return () => {
+      script.onload = null;
+    };
+  }, [activeTab, googleGeo, googleTimeframe, keywords]);
+
+  function downloadCsv(filePrefix: string, rows: Record<string, unknown>[]) {
+    const fileName = `${filePrefix}_${new Date().toISOString().slice(0, 10).replace(/-/g, "")}.csv`;
+    downloadFile(fileName, toCsv(rows), "text/csv;charset=utf-8;");
+  }
+
+  function downloadTxt(filePrefix: string, content: string) {
+    const fileName = `${filePrefix}_${new Date().toISOString().slice(0, 10).replace(/-/g, "")}.txt`;
+    downloadFile(fileName, content, "text/plain;charset=utf-8;");
+  }
 
   async function runAnalysis() {
     if (!keywords.length) {
@@ -483,7 +614,26 @@ export default function Home() {
               )}
             </div>
             <div className={styles.panelCard}>
-              <h3>트렌드 원본 데이터</h3>
+              <div className={styles.panelHeader}>
+                <h3>트렌드 원본 데이터</h3>
+                <button
+                  type="button"
+                  className={styles.downloadBtn}
+                  disabled={!trendRows.length}
+                  onClick={() =>
+                    downloadCsv(
+                      "trend_data",
+                      trendRows.map((row) => ({
+                        키워드: row.keyword,
+                        날짜: row.period,
+                        검색지수: row.ratio,
+                      })),
+                    )
+                  }
+                >
+                  CSV 다운로드
+                </button>
+              </div>
               {renderTrendTable()}
             </div>
           </section>
@@ -507,7 +657,28 @@ export default function Home() {
               </article>
             </div>
             <div className={styles.panelCard}>
-              <h3>실시간 쇼핑 결과</h3>
+              <div className={styles.panelHeader}>
+                <h3>실시간 쇼핑 결과</h3>
+                <button
+                  type="button"
+                  className={styles.downloadBtn}
+                  disabled={!shopItems.length}
+                  onClick={() =>
+                    downloadCsv(
+                      "shop_data",
+                      shopItems.map((item) => ({
+                        키워드: item.searchKeyword,
+                        상품명: stripHtml(item.title),
+                        판매처: item.mallName || "",
+                        최저가: item.lprice ? Number(item.lprice) : "",
+                        링크: item.link,
+                      })),
+                    )
+                  }
+                >
+                  CSV 다운로드
+                </button>
+              </div>
               {renderShopTable()}
             </div>
           </section>
@@ -517,7 +688,27 @@ export default function Home() {
         return (
           <section className={styles.tabPanel}>
             <div className={styles.panelCard}>
-              <h3>블로그 수집 결과</h3>
+              <div className={styles.panelHeader}>
+                <h3>블로그 수집 결과</h3>
+                <button
+                  type="button"
+                  className={styles.downloadBtn}
+                  disabled={!blogItems.length}
+                  onClick={() =>
+                    downloadCsv(
+                      "blog_data",
+                      blogItems.map((item) => ({
+                        키워드: item.searchKeyword,
+                        제목: stripHtml(item.title),
+                        작성일: toShortDate(item.postdate || ""),
+                        링크: item.link,
+                      })),
+                    )
+                  }
+                >
+                  CSV 다운로드
+                </button>
+              </div>
               {renderContentTable(blogItems, "blog")}
             </div>
           </section>
@@ -527,7 +718,27 @@ export default function Home() {
         return (
           <section className={styles.tabPanel}>
             <div className={styles.panelCard}>
-              <h3>카페 수집 결과</h3>
+              <div className={styles.panelHeader}>
+                <h3>카페 수집 결과</h3>
+                <button
+                  type="button"
+                  className={styles.downloadBtn}
+                  disabled={!cafeItems.length}
+                  onClick={() =>
+                    downloadCsv(
+                      "cafe_data",
+                      cafeItems.map((item) => ({
+                        키워드: item.searchKeyword,
+                        제목: stripHtml(item.title),
+                        작성일: toShortDate(item.postdate || ""),
+                        링크: item.link,
+                      })),
+                    )
+                  }
+                >
+                  CSV 다운로드
+                </button>
+              </div>
               {renderContentTable(cafeItems, "cafe")}
             </div>
           </section>
@@ -537,7 +748,27 @@ export default function Home() {
         return (
           <section className={styles.tabPanel}>
             <div className={styles.panelCard}>
-              <h3>뉴스 수집 결과</h3>
+              <div className={styles.panelHeader}>
+                <h3>뉴스 수집 결과</h3>
+                <button
+                  type="button"
+                  className={styles.downloadBtn}
+                  disabled={!newsItems.length}
+                  onClick={() =>
+                    downloadCsv(
+                      "news_data",
+                      newsItems.map((item) => ({
+                        키워드: item.searchKeyword,
+                        제목: stripHtml(item.title),
+                        발행일: toShortDate(item.pubDate || ""),
+                        링크: item.link,
+                      })),
+                    )
+                  }
+                >
+                  CSV 다운로드
+                </button>
+              </div>
               {renderContentTable(newsItems, "news")}
             </div>
           </section>
@@ -575,7 +806,26 @@ export default function Home() {
               )}
             </div>
             <div className={styles.panelCard}>
-              <h3>쇼핑인사이트 원본 데이터</h3>
+              <div className={styles.panelHeader}>
+                <h3>쇼핑인사이트 원본 데이터</h3>
+                <button
+                  type="button"
+                  className={styles.downloadBtn}
+                  disabled={!insightRows.length}
+                  onClick={() =>
+                    downloadCsv(
+                      "shopping_insight_data",
+                      insightRows.map((row) => ({
+                        키워드: row.keyword,
+                        날짜: row.period,
+                        클릭지수: row.ratio,
+                      })),
+                    )
+                  }
+                >
+                  CSV 다운로드
+                </button>
+              </div>
               {renderInsightTable()}
             </div>
           </section>
@@ -585,7 +835,12 @@ export default function Home() {
         return (
           <section className={styles.tabPanel}>
             <div className={styles.panelCard}>
-              <h3>종합 요약</h3>
+              <div className={styles.panelHeader}>
+                <h3>종합 요약</h3>
+                <button type="button" className={styles.downloadBtn} onClick={() => downloadTxt("report", reportText)}>
+                  TXT 다운로드
+                </button>
+              </div>
               <div className={styles.reportText}>
                 <p>
                   <strong>트렌드 최고점</strong>: {trendPeak.keyword} / {trendPeak.period} / {trendPeak.ratio.toFixed(2)}
@@ -635,7 +890,8 @@ export default function Home() {
                   구글 트렌드 새 탭으로 열기
                 </a>
               </div>
-              <iframe src={googleTrendsUrl} title="Google Trends" className={styles.googleFrame} />
+              <p className={styles.empty}>탭 안에서는 공식 위젯을 로드하고, 차단 시 위 버튼으로 새 탭에서 열 수 있습니다.</p>
+              <div id="google-trends-widget" className={styles.googleWidget} />
             </div>
           </section>
         );

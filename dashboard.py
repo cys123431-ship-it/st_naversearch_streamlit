@@ -168,32 +168,55 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # --- 인증 및 경로 설정 ---
+def _clean_secret_value(value):
+    if value is None:
+        return None
+    cleaned = str(value).strip().strip("'").strip('"')
+    return cleaned if cleaned else None
+
+
 def get_api_keys():
-    """네이버 API 키를 가져옵니다. (Cloud Secrets 및 로컬 .env 지원)"""
-    cid, csec = None, None
-    
-    # 1. Streamlit Secrets (Cloud 배포시)
+    """네이버 API 키를 가져옵니다. (Cloud Secrets, 환경변수, 로컬/외부 .env 지원)"""
+    # 1) Streamlit Secrets (Cloud 배포시)
     try:
-        if 'NAVER_CLIENT_ID' in st.secrets:
-            cid = st.secrets['NAVER_CLIENT_ID']
-            csec = st.secrets['NAVER_CLIENT_SECRET']
+        if "NAVER_CLIENT_ID" in st.secrets and "NAVER_CLIENT_SECRET" in st.secrets:
+            cid = _clean_secret_value(st.secrets["NAVER_CLIENT_ID"])
+            csec = _clean_secret_value(st.secrets["NAVER_CLIENT_SECRET"])
+            if cid and csec:
+                return cid, csec, "Streamlit Secrets"
     except Exception:
         pass
-    
-    # 2. 로컬 .env 파일
-    if not cid or not csec:
-        env_path = os.path.join(os.path.dirname(__file__), '.env')
-        if os.path.exists(env_path):
-            load_dotenv(env_path, override=True)
-            cid = os.getenv('NAVER_CLIENT_ID')
-            csec = os.getenv('NAVER_CLIENT_SECRET')
 
-    if cid: cid = str(cid).strip().strip("'").strip('"')
-    if csec: csec = str(csec).strip().strip("'").strip('"')
-    
-    return cid, csec
+    # 2) OS 환경변수
+    cid = _clean_secret_value(os.getenv("NAVER_CLIENT_ID"))
+    csec = _clean_secret_value(os.getenv("NAVER_CLIENT_SECRET"))
+    if cid and csec:
+        return cid, csec, "OS Environment"
 
-CLIENT_ID, CLIENT_SECRET = get_api_keys()
+    # 3) .env 파일 탐색 (현재 프로젝트 + 상위 naverapp)
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    project_env_path = os.path.join(base_dir, ".env")
+    sibling_naverapp_env_path = os.path.join(os.path.dirname(base_dir), "naverapp", ".env")
+
+    env_candidates = []
+    explicit_env_path = os.getenv("NAVER_ENV_PATH")
+    if explicit_env_path:
+        env_candidates.append(explicit_env_path)
+    env_candidates.extend([project_env_path, sibling_naverapp_env_path])
+
+    for env_path in env_candidates:
+        if not env_path or not os.path.exists(env_path):
+            continue
+        load_dotenv(env_path, override=False)
+        cid = _clean_secret_value(os.getenv("NAVER_CLIENT_ID"))
+        csec = _clean_secret_value(os.getenv("NAVER_CLIENT_SECRET"))
+        if cid and csec:
+            return cid, csec, env_path
+
+    return None, None, "미설정"
+
+
+CLIENT_ID, CLIENT_SECRET, API_KEY_SOURCE = get_api_keys()
 HEADERS = {"X-Naver-Client-Id": CLIENT_ID, "X-Naver-Client-Secret": CLIENT_SECRET, "Content-Type": "application/json"}
 
 # --- 실시간 API 호출 함수 ---
@@ -420,13 +443,16 @@ if not CLIENT_ID or not CLIENT_SECRET:
     st.sidebar.error("❌ API 인증 키를 로드할 수 없습니다.")
     st.sidebar.markdown("""
         **해결 가이드:**
-        1. `naverapieda/.env` 파일 생성 확인
-        2. 파일 내용:
+        1. 아래 경로 중 하나에 `.env` 파일 생성
+           - `st_naversearch/.env`
+           - `../naverapp/.env`
+        2. 파일 내용 확인:
            ```text
            NAVER_CLIENT_ID=고객아이디
            NAVER_CLIENT_SECRET=비밀키
            ```
-        3. 공백이나 따옴표 없이 입력 권장
+        3. 배포 환경에서는 Streamlit Secrets 사용
+        4. 공백이나 따옴표 없이 입력 권장
     """)
 
 st.sidebar.header("🔍 실시간 분석 설정")
@@ -1441,7 +1467,7 @@ with tab7:
     st.divider()
     
 auth_status = "✅ 인증 완료" if (CLIENT_ID and CLIENT_SECRET) else "❌ 인증 미완료"
-st.sidebar.caption(f"상태: {auth_status} | 업데이트: {datetime.now().strftime('%H:%M:%S')}")
+st.sidebar.caption(f"상태: {auth_status} | 소스: {API_KEY_SOURCE} | 업데이트: {datetime.now().strftime('%H:%M:%S')}")
 st.sidebar.caption("[© 오늘코드](https://www.youtube.com/todaycode)")
 
 # 우측 하단 고정 링크

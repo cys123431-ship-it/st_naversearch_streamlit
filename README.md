@@ -136,7 +136,14 @@ pip install -r requirements.txt
 
 ### 3단계: 환경 변수(.env) 설정
 
-프로젝트 폴더 최상위에 `.env` 파일을 만들고, 위에서 발급받은 API 키를 입력합니다.
+앱은 아래 순서로 인증 키를 읽습니다.
+
+1. Streamlit Secrets (배포 환경)
+2. OS 환경 변수 (`NAVER_CLIENT_ID`, `NAVER_CLIENT_SECRET`)
+3. `st_naversearch/.env`
+4. `../naverapp/.env` (이미 별도 `naverapp` 폴더를 쓰는 경우)
+
+가장 간단한 방법은 프로젝트 폴더 최상위(`st_naversearch/.env`)에 파일을 만드는 것입니다.
 
 ```text
 NAVER_CLIENT_ID=내_클라이언트_ID
@@ -144,6 +151,8 @@ NAVER_CLIENT_SECRET=내_클라이언트_시크릿
 ```
 
 * ⚠️ **주의**: 등호(`=`) 앞뒤에 공백이 없어야 하며, 따옴표 없이 값만 입력합니다.
+* 이미 상위 경로에 `../naverapp/.env`를 사용 중이라면, 별도 복사 없이 그대로 재사용할 수 있습니다.
+* 필요시 특정 경로를 강제하려면 `NAVER_ENV_PATH=/원하는/.env/경로` 환경 변수를 설정하세요.
 
 ### 4단계: 대시보드 실행
 
@@ -194,6 +203,8 @@ streamlit run dashboard.py
 NAVER_CLIENT_ID = "내_클라이언트_ID"
 NAVER_CLIENT_SECRET = "내_클라이언트_시크릿"
 ```
+
+`secrets.toml.example` 파일을 템플릿으로 사용해도 됩니다.
 
 * ⚠️ Secrets에서는 **TOML 형식**을 사용하므로, 값을 **큰따옴표**로 감싸야 합니다.
 * 저장 후 앱이 자동으로 재시작되며, API 데이터가 정상적으로 표시됩니다.

@@ -257,6 +257,17 @@
   margin-bottom: 0;
 }
 
+.badge {
+  display: inline-block;
+  border: 1px solid #d6dff9;
+  background: #f4f7ff;
+  color: #4660b0;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
 .downloadBtn {
   border: 1px solid #c8d5ff;
   border-radius: 10px;
@@ -271,6 +282,73 @@
 .downloadBtn:disabled {
   cursor: not-allowed;
   opacity: 0.45;
+}
+
+.controlRow {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.controlRow label {
+  display: grid;
+  gap: 6px;
+  color: #5b6791;
+  font-size: 0.83rem;
+}
+
+.controlRow select {
+  border: 1px solid #dce4ff;
+  border-radius: 10px;
+  background: #fff;
+  padding: 9px 10px;
+}
+
+.inlineInfo {
+  display: flex;
+  align-items: center;
+  border: 1px dashed #cfd9fb;
+  border-radius: 10px;
+  padding: 9px 10px;
+  background: #f8faff;
+  color: #5770bb;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.ageWrap {
+  border: 1px solid #e4eafd;
+  border-radius: 12px;
+  background: #fbfcff;
+  padding: 10px;
+  margin-bottom: 12px;
+}
+
+.ageLabel {
+  display: inline-block;
+  margin-bottom: 8px;
+  color: #5b6791;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.ageGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.ageCheck {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #4e5e91;
+  font-size: 0.79rem;
+}
+
+.ageCheck input {
+  accent-color: #2f55ff;
 }
 
 .rowGrid {
@@ -340,9 +418,63 @@
   font-weight: 700;
 }
 
+.pager {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.pager button {
+  border: 1px solid #d6dff9;
+  border-radius: 8px;
+  background: #f5f8ff;
+  color: #3e4f8c;
+  padding: 6px 10px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.pager button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.pager span {
+  color: #6070a4;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
 .empty {
   color: #7583ad;
   font-size: 0.88rem;
+}
+
+.subTitle {
+  margin: 10px 0 8px;
+  color: #4d5d90;
+  font-size: 0.84rem;
+  font-weight: 800;
+}
+
+.wordChipWrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.wordChip {
+  border: 1px solid #d6dff9;
+  background: #f6f9ff;
+  color: #4a5e9f;
+  border-radius: 999px;
+  padding: 5px 10px;
+  font-size: 0.77rem;
+  font-weight: 700;
 }
 
 .reportText {
@@ -350,6 +482,57 @@
   gap: 10px;
   color: #4c5881;
   line-height: 1.6;
+}
+
+.thumbGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.thumbCard {
+  border: 1px solid #dce4ff;
+  border-radius: 14px;
+  background: #fff;
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.thumbCard img {
+  width: 100%;
+  height: 130px;
+  object-fit: cover;
+  border-radius: 10px;
+  background: #f1f4ff;
+}
+
+.thumbCard h4 {
+  font-size: 0.84rem;
+  color: #27386d;
+  line-height: 1.35;
+}
+
+.thumbCard p {
+  font-size: 0.75rem;
+  color: #6776a6;
+}
+
+.thumbCard strong {
+  font-size: 0.9rem;
+  color: #1a2d68;
+}
+
+.noImage {
+  width: 100%;
+  height: 130px;
+  border-radius: 10px;
+  background: #eef2ff;
+  color: #7a88b5;
+  display: grid;
+  place-items: center;
+  font-size: 0.75rem;
+  font-weight: 700;
 }
 
 .googleControls {
@@ -393,6 +576,13 @@
   overflow: hidden;
 }
 
+.errorInline {
+  margin-top: 10px;
+  color: #b31e46;
+  font-size: 0.83rem;
+  font-weight: 700;
+}
+
 @media (max-width: 1240px) {
   .shell {
     grid-template-columns: 1fr;
@@ -404,6 +594,10 @@
 
   .metricGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .thumbGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
@@ -424,6 +618,15 @@
   .metricGrid,
   .rowGrid {
     grid-template-columns: 1fr;
+  }
+
+  .controlRow,
+  .ageGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .thumbGrid {
+    grid-template-columns: 1fr 1fr;
   }
 
   .tabButton {
